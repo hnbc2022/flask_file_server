@@ -1,0 +1,25 @@
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 开发工具配置
+.idea/
+
+# 编译生成文件
+*.exe
+
+# 日志
+*.log
+
+# 数据库
+*.db
+
+# Word 临时文件
+~$*.doc
+
+# 忽略共享目录中的实际内容，只保留目录结构
+privite_shared/*
+shared_folders/*
+!privite_shared/.gitkeep
+!shared_folders/.gitkeep
+
