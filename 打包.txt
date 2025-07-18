@@ -1,0 +1,21 @@
+conda activate my_flask_env
+cd /d E:\flask_file_server-dev
+
+pyinstaller --onefile ^
+  --noconsole ^
+  --add-data "点名册.xlsx;." ^
+  --add-data "users.db;." ^
+  --collect-all flask ^
+  --collect-all werkzeug ^
+  --collect-all pandas ^
+  --collect-all openpyxl ^
+  --collect-all jinja2 ^
+  --hidden-import flask ^
+  --hidden-import werkzeug.security ^
+  --hidden-import jinja2 ^
+  --hidden-import pandas ^
+  --hidden-import openpyxl ^
+  --hidden-import tkinter ^
+  --hidden-import tkinter.filedialog ^
+  --log-level DEBUG ^
+  file_server.py

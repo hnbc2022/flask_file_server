@@ -1,0 +1,5 @@
+安装说明：
+1.flask_file_server压缩文件解压释放到D:\flask_file_server
+2.双击D:\flask_file_server文件夹中的file_server.exe文件运行程序。
+3.登录浏览器访问http://ip:7000/ 
+注意：程序在哪个主机运行，ip就是该主机的ip；管理员名：admin 密码：ad1234；学生登录名：学生姓名  密码：password123

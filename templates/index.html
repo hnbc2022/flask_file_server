@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🗂 Windows文件共享</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+        }
+        .file-icon {
+            margin-right: 10px;
+        }
+        .file-name {
+            flex-grow: 1;
+            cursor: pointer;
+        }
+        .alert {
+            margin-top: 10px;
+        }
+        .path-label {
+            word-break: break-all;
+        }
+        /* 自定义文件输入按钮样式 */
+        .file-upload-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        .file-upload-wrapper input[type=file] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        .file-upload-wrapper .btn {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="page-header">
+            <span class="glyphicon glyphicon-folder-open"></span> Windows文件共享
+        </h1>
+        <div class="row">
+            <div class="col-md-12">
+                <p>
+                    欢迎，{{ session.username }}（{{ '管理员' if session.role == 'admin' else '用户' }}）！
+                    {% if session.role == 'admin' %}
+                    <a href="{{ url_for('manage_users') }}" class="btn btn-primary btn-sm">用户管理</a>
+                    {% endif %}
+                    <a href="{{ url_for('change_password') }}" class="btn btn-primary btn-sm">修改密码</a>
+                    <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">注销</a>
+                </p>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% if session.role == 'admin' %}
+        <div class="row">
+            <div class="col-md-12">
+                <h3>
+                    当前共享路径：
+                    <span class="label label-default path-label"><span id="publicPathDisplay">{{ public_path }}</span>/<span id="publicSubPathDisplay"></span></span>
+                    <a href="javascript:void(0);" class="back-btn public-back-btn" style="display: none;">返回上一级</a>
+                </h3>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        文件夹选择
+                    </div>
+                    <div class="panel-body">
+                        <button id="pickFolderBtn" class="btn btn-primary">
+                            <span class="glyphicon glyphicon-folder-open"></span> 选择顶层共享文件夹
+                        </button>
+                        <div id="folderPickStatus" class="alert alert-info" style="display: none;">
+                            正在启动系统对话框...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        上传文件/文件夹（公共共享文件夹）
+                    </div>
+                    <div class="panel-body">
+                        <form id="publicUploadForm" enctype="multipart/form-data">
+                            <div class="file-upload-wrapper">
+                                <button type="button" class="btn btn-default form-control">选择文件夹</button>
+                                <input type="file" name="files" multiple webkitdirectory>
+                            </div>
+                            <input type="hidden" name="subPath" id="publicSubPath" value="">
+                            <br>
+                            <button type="submit" class="btn btn-primary">
+                                <span class="glyphicon glyphicon-upload"></span> 上传
+                            </button>
+                        </form>
+                        <div id="statusPublic" class="alert" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        公共共享文件夹文件列表 ({{ public_file_count }} 项)
+                    </div>
+                    <div class="panel-body" id="publicFileList">
+                        {% for item in public_files %}
+                        <div class="file-item" data-path="{{ item.name }}" data-is-dir="{{ 'true' if item.is_dir else 'false' }}">
+                            <span class="file-icon">{% if item.is_dir %}📁{% else %}📄{% endif %}</span>
+                            <span class="file-name">{{ item.name }}</span>
+                            <div>
+                                {% if item.is_dir %}
+                                <a href="/download_folder/{{ item.name | urlencode }}?folder=public" class="btn btn-primary btn-sm">下载</a>
+                                {% else %}
+                                <a href="/download/{{ item.name | urlencode }}?folder=public&path=" class="btn btn-primary btn-sm">下载</a>
+                                {% endif %}
+                                <a href="javascript:void(0);" class="btn btn-danger btn-sm delete-btn" data-filename="{{ item.name }}" data-folder="public" data-path="{{ item.name }}">删除</a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="row">
+            <div class="col-md-12">
+                <h3>
+                    个人共享路径：
+                    <span class="label label-default path-label"><span id="personalPathDisplay">{{ personal_path }}</span>/<span id="personalSubPathDisplay"></span></span>
+                    <a href="javascript:void(0);" class="back-btn personal-back-btn" style="display: none;">返回上一级</a>
+                </h3>
+                <h3>
+                    公共共享路径：
+                    <span class="label label-default path-label"><span id="publicPathDisplay">{{ public_path }}</span>/<span id="publicSubPathDisplay"></span></span>
+                    <a href="javascript:void(0);" class="back-btn public-back-btn" style="display: none;">返回上一级</a>
+                </h3>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        上传文件/文件夹（个人共享文件夹）
+                    </div>
+                    <div class="panel-body">
+                        <form id="personalUploadForm" enctype="multipart/form-data">
+                            <div class="file-upload-wrapper">
+                                <button type="button" class="btn btn-default form-control">选择文件夹</button>
+                                <input type="file" name="files" multiple webkitdirectory>
+                            </div>
+                            <input type="hidden" name="subPath" id="personalSubPath" value="">
+                            <br>
+                            <button type="submit" class="btn btn-primary">
+                                <span class="glyphicon glyphicon-upload"></span> 上传
+                            </button>
+                        </form>
+                        <div id="statusPersonal" class="alert" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        个人共享文件夹文件列表 ({{ personal_file_count }} 项)
+                    </div>
+                    <div class="panel-body" id="personalFileList">
+                        {% for item in personal_files %}
+                        <div class="file-item" data-path="{{ item.name }}" data-is-dir="{{ 'true' if item.is_dir else 'false' }}">
+                            <span class="file-icon">{% if item.is_dir %}📁{% else %}📄{% endif %}</span>
+                            <span class="file-name">{{ item.name }}</span>
+                            <div>
+                                {% if item.is_dir %}
+                                <a href="/download_folder/{{ item.name | urlencode }}?folder=personal" class="btn btn-primary btn-sm">下载</a>
+                                {% else %}
+                                <a href="/download/{{ item.name | urlencode }}?folder=personal&path=" class="btn btn-primary btn-sm">下载</a>
+                                {% endif %}
+                                <a href="javascript:void(0);" class="btn btn-danger btn-sm delete-btn" data-filename="{{ item.name }}" data-folder="personal" data-path="{{ item.name }}">删除</a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        上传文件/文件夹（公共共享文件夹）
+                    </div>
+                    <div class="panel-body">
+                        <form id="publicUploadForm" enctype="multipart/form-data">
+                            <div class="file-upload-wrapper">
+                                <button type="button" class="btn btn-default form-control">选择文件夹</button>
+                                <input type="file" name="files" multiple webkitdirectory>
+                            </div>
+                            <input type="hidden" name="subPath" id="publicSubPath" value="">
+                            <br>
+                            <button type="submit" class="btn btn-primary">
+                                <span class="glyphicon glyphicon-upload"></span> 上传
+                            </button>
+                        </form>
+                        <div id="statusPublic" class="alert" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="panel panel-primary">
+                    <div class="panel-heading">
+                        公共共享文件夹文件列表 ({{ public_file_count }} 项)
+                    </div>
+                    <div class="panel-body" id="publicFileList">
+                        {% for item in public_files %}
+                        <div class="file-item" data-path="{{ item.name }}" data-is-dir="{{ 'true' if item.is_dir else 'false' }}">
+                            <span class="file-icon">{% if item.is_dir %}📁{% else %}📄{% endif %}</span>
+                            <span class="file-name">{{ item.name }}</span>
+                            <div>
+                                {% if item.is_dir %}
+                                <a href="/download_folder/{{ item.name | urlencode }}?folder=public" class="btn btn-primary btn-sm">下载</a>
+                                {% else %}
+                                <a href="/download/{{ item.name | urlencode }}?folder=public&path=" class="btn btn-primary btn-sm">下载</a>
+                                {% endif %}
+                                <a href="javascript:void(0);" class="btn btn-danger btn-sm delete-btn" data-filename="{{ item.name }}" data-folder="public" data-path="{{ item.name }}">删除</a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/js/bootstrap.min.js"></script>
+    <script>
+    function showStatus(containerId, message, isError = false, isProgress = false) {
+        var statusDiv = document.getElementById(containerId);
+        statusDiv.style.display = 'block';
+        statusDiv.className = 'alert ' + (isProgress ? 'alert-info' : isError ? 'alert-danger' : 'alert-success');
+        statusDiv.innerHTML = message;
+        if (!isProgress) {
+            setTimeout(function() {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+    }
+
+    function updatePathDisplay(folder, basePath, subPath) {
+        var pathDisplay = document.getElementById(folder + 'PathDisplay');
+        var subPathDisplay = document.getElementById(folder + 'SubPathDisplay');
+        pathDisplay.textContent = basePath;
+        subPathDisplay.textContent = subPath;
+        var backBtn = document.querySelector('.' + folder + '-back-btn');
+        backBtn.style.display = subPath ? 'inline' : 'none';
+        // 绑定或更新顶部按钮事件
+        backBtn.addEventListener('click', function() {
+            var parentPath = subPath.includes('/') ? subPath.substring(0, subPath.lastIndexOf('/')) : '';
+            loadFolder(folder, parentPath, folder === 'public' ? 'publicFileList' : 'personalFileList');
+        });
+    }
+
+    function loadFolder(folder, subPath, containerId) {
+        var listContainer = document.getElementById(containerId);
+        $.getJSON('/list_folder?folder=' + folder + '&path=' + encodeURIComponent(subPath), function(data) {
+            if (!data.success) {
+                showStatus(containerId === 'publicFileList' ? 'statusPublic' : 'statusPersonal', data.message, true);
+                return;
+            }
+            listContainer.innerHTML = subPath ? '<a href="javascript:void(0);" class="btn btn-default btn-sm back-btn">返回上一级</a><br><br>' : '';
+            data.items.forEach(function(item) {
+                var fullPath = subPath ? subPath + '/' + item.name : item.name;
+                var encodedFullPath = encodeURIComponent(fullPath);
+                var div = document.createElement('div');
+                div.className = 'file-item';
+                div.dataset.path = fullPath;
+                div.dataset.isDir = item.is_dir.toString().toLowerCase();
+                div.innerHTML = `
+                    <span class="file-icon">${item.is_dir ? '📁' : '📄'}</span>
+                    <span class="file-name">${item.name}${item.is_dir && item.size ? ' (' + (item.size / (1024 * 1024)).toFixed(1) + 'MB)' : ''}</span>
+                    <div>
+                        ${item.is_dir ?
+                            '<a href="/download_folder/' + encodedFullPath + '?folder=' + folder + '" class="btn btn-primary btn-sm download-btn" data-folder="' + folder + '" data-path="' + encodedFullPath + '">下载</a>' :
+                            '<a href="/download/' + encodeURIComponent(item.name) + '?folder=' + folder + '&path=' + encodeURIComponent(subPath) + '" class="btn btn-primary btn-sm download-btn" data-folder="' + folder + '" data-path="' + encodeURIComponent(subPath) + '">下载</a>'}
+                        <a href="javascript:void(0);" class="btn btn-danger btn-sm delete-btn" data-filename="${item.name}" data-folder="${folder}" data-path="${fullPath}">删除</a>
+                    </div>
+                `;
+                listContainer.appendChild(div);
+            });
+
+            // 更新路径显示
+            var basePath = document.getElementById(folder + 'PathDisplay').textContent;
+            updatePathDisplay(folder, basePath, subPath);
+            document.getElementById(containerId === 'publicFileList' ? 'publicSubPath' : 'personalSubPath').value = subPath;
+
+            // 绑定底部返回按钮
+            listContainer.querySelectorAll('.back-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var parentPath = subPath.includes('/') ? subPath.substring(0, subPath.lastIndexOf('/')) : '';
+                    loadFolder(folder, parentPath, containerId);
+                });
+            });
+
+            // 绑定下载按钮
+            listContainer.querySelectorAll('.download-btn').forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var folder = btn.dataset.folder;
+                    var path = btn.dataset.path;
+                    var statusContainer = folder === 'public' ? 'statusPublic' : 'statusPersonal';
+                    showStatus(statusContainer, '下载中...', false, true);
+                    $.ajax({
+                        url: btn.href,
+                        method: 'GET',
+                        xhrFields: {
+                            responseType: 'blob' // 支持二进制文件下载
+                        },
+                        success: function(data, status, xhr) {
+                            var contentDisposition = xhr.getResponseHeader('Content-Disposition');
+                            var filename = contentDisposition ? contentDisposition.match(/filename="(.+)"/)[1] : 'downloaded_file';
+                            var blob = new Blob([data]);
+                            var link = document.createElement('a');
+                            link.href = window.URL.createObjectURL(blob);
+                            link.download = decodeURIComponent(filename); // 解码文件名，支持非 ASCII
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            window.URL.revokeObjectURL(link.href);
+                            showStatus(statusContainer, '下载成功', false);
+                        },
+                        error: function(xhr, status, error) {
+                            var message = '下载失败: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : error);
+                            showStatus(statusContainer, message, true);
+                        }
+                    });
+                });
+            });
+
+            // 绑定文件夹点击
+            listContainer.querySelectorAll('.file-name').forEach(function(name) {
+                if (name.parentElement.dataset.isDir === 'true') {
+                    name.addEventListener('click', function() {
+                        loadFolder(folder, name.parentElement.dataset.path, containerId);
+                    });
+                }
+            });
+
+            // 绑定删除按钮
+            listContainer.querySelectorAll('.delete-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var filename = btn.dataset.filename;
+                    var folder = btn.dataset.folder;
+                    var path = btn.dataset.path;
+                    if (confirm('确定要删除 ' + filename + ' 吗？')) {
+                        showStatus(containerId === 'publicFileList' ? 'statusPublic' : 'statusPersonal', '正在删除 ' + filename + '...', false, true);
+                        $.ajax({
+                            url: '/delete/' + encodeURIComponent(filename) + '?folder=' + folder + '&path=' + encodeURIComponent(subPath),
+                            method: 'POST',
+                            contentType: 'application/json',
+                            success: function(data) {
+                                if (data.success) {
+                                    showStatus(containerId === 'publicFileList' ? 'statusPublic' : 'statusPersonal', data.message);
+                                    loadFolder(folder, subPath, containerId);
+                                } else {
+                                    showStatus(containerId === 'publicFileList' ? 'statusPublic' : 'statusPersonal', data.message, true);
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                var message = '删除失败: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : error);
+                                showStatus(containerId === 'publicFileList' ? 'statusPublic' : 'statusPersonal', message, true);
+                            }
+                        });
+                    }
+                });
+            });
+        }).fail(function(xhr, status, error) {
+            var message = '加载文件夹失败: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : error);
+            showStatus(containerId === 'publicFileList' ? 'statusPublic' : 'statusPersonal', message, true);
+        });
+    }
+
+    // 上传表单
+    ['publicUploadForm', 'personalUploadForm'].forEach(function(formId) {
+        var form = document.getElementById(formId);
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                var folder = formId === 'publicUploadForm' ? 'public' : 'personal';
+                var subPath = document.getElementById(folder + 'SubPath').value;
+                var formData = new FormData(form);
+                formData.append('subPath', subPath);
+
+                // 显示上传开始提示
+                showStatus(formId === 'publicUploadForm' ? 'statusPublic' : 'statusPersonal', '正在上传...', false, true);
+
+                $.ajax({
+                    url: '/upload?folder=' + folder,
+                    method: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(data) {
+                        showStatus(formId === 'publicUploadForm' ? 'statusPublic' : 'statusPersonal', data.message, !data.success);
+                        if (data.success) {
+                            loadFolder(folder, subPath, formId === 'publicUploadForm' ? 'publicFileList' : 'personalFileList');
+                            form.reset();
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        var message = '上传失败: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : error);
+                        showStatus(formId === 'publicUploadForm' ? 'statusPublic' : 'statusPersonal', message, true);
+                    }
+                });
+            });
+        }
+    });
+
+    // 文件夹选择
+    var pickFolderBtn = document.getElementById('pickFolderBtn');
+    if (pickFolderBtn) {
+        pickFolderBtn.addEventListener('click', function() {
+            showStatus('folderPickStatus', '正在启动系统对话框...');
+            $.ajax({
+                url: '/pick_folder',
+                method: 'POST',
+                contentType: 'application/json',
+                success: function(data) {
+                    showStatus('folderPickStatus', data.message, !data.success);
+                    if (data.success) {
+                        document.getElementById('publicPathDisplay').textContent = data.path;
+                        loadFolder('public', '', 'publicFileList');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    var message = '更改文件夹失败: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : error);
+                    showStatus('folderPickStatus', message, true);
+                }
+            });
+        });
+    }
+
+    // 初始化加载
+    document.addEventListener('DOMContentLoaded', function() {
+        loadFolder('public', '', 'publicFileList');
+        {% if session.role != 'admin' %}
+            loadFolder('personal', '', 'personalFileList');
+        {% endif %}
+    });
+</script>
+</body>
+</html>

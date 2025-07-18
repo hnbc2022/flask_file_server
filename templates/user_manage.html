@@ -1,0 +1,237 @@
+<!doctype html>
+<html>
+<head>
+    <title>用户管理 - 文件共享服务</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .container { max-width: 800px; }
+        .user-table { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>👤 用户管理</h2>
+            <div>
+                <span class="me-3">欢迎，{{ session.username }}（管理员）！</span>
+                <a href="/logout" class="btn btn-outline-danger btn-sm">注销</a>
+                <a href="/" class="btn btn-outline-primary btn-sm">返回主页</a>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5>初始化用户</h5>
+            </div>
+            <div class="card-body">
+                <button id="initUsersBtn" class="btn btn-primary">从点名册初始化用户</button>
+                <div id="initStatus" class="alert" style="display: none;"></div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5>添加新用户</h5>
+            </div>
+            <div class="card-body">
+                <form id="addUserForm" method="post" action="/add_user">
+                    <div class="mb-3">
+                        <label for="new_username" class="form-label">用户名</label>
+                        <input type="text" class="form-control" id="new_username" name="new_username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="new_password" class="form-label">密码</label>
+                        <input type="text" class="form-control" id="new_password" name="new_password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="role" class="form-label">角色</label>
+                        <select class="form-control" id="role" name="role">
+                            <option value="user">普通用户</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success">添加用户</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5>用户列表 ({{ user_count }} 项)</h5>
+            </div>
+            <div class="list-group list-group-flush user-table">
+                {% for user, info in users.items() %}
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>{{ user }} ({{ '管理员' if info.role == 'admin' else '普通用户' }})</span>
+                    <div>
+                        <button class="btn btn-sm btn-outline-warning edit-user-btn me-2" data-username="{{ user }}">修改密码</button>
+                        <button class="btn btn-sm btn-outline-danger delete-user-btn" data-username="{{ user }}">删除</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('initUsersBtn').addEventListener('click', function() {
+            const btn = this;
+            const statusDiv = document.getElementById('initStatus');
+            btn.disabled = true;
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'alert alert-info';
+            statusDiv.textContent = '正在从点名册初始化用户...';
+
+            const xhr = new XMLHttpRequest();
+            xhr.timeout = 30000;
+
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    btn.disabled = false;
+                    try {
+                        const result = JSON.parse(xhr.responseText);
+                        if (xhr.status === 200 && result.success) {
+                            statusDiv.className = 'alert alert-success';
+                            statusDiv.textContent = result.message;
+                            setTimeout(() => location.reload(), 800);
+                        } else {
+                            statusDiv.className = 'alert alert-danger';
+                            statusDiv.textContent = '错误: ' + (result.message || '初始化失败');
+                        }
+                    } catch (e) {
+                        statusDiv.className = 'alert alert-danger';
+                        statusDiv.textContent = '错误: ' + (e.message || '未知错误');
+                        console.error('初始化用户失败:', e);
+                    }
+                }
+            };
+
+            xhr.ontimeout = function() {
+                statusDiv.className = 'alert alert-warning';
+                statusDiv.textContent = '初始化用户超时，请重试';
+                btn.disabled = false;
+            };
+
+            xhr.open('POST', '/init_users', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.send();
+        });
+
+        document.getElementById('addUserForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const form = this;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+
+            const formData = new FormData(form);
+            const xhr = new XMLHttpRequest();
+            xhr.timeout = 30000;
+
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    submitBtn.disabled = false;
+                    try {
+                        const result = JSON.parse(xhr.responseText);
+                        if (xhr.status === 200 && result.success) {
+                            alert('用户添加成功！');
+                            location.reload();
+                        } else {
+                            alert('错误: ' + (result.message || '添加失败'));
+                        }
+                    } catch (e) {
+                        alert('错误: ' + (e.message || '未知错误'));
+                        console.error('添加用户失败:', e);
+                    }
+                }
+            };
+
+            xhr.ontimeout = function() {
+                alert('添加用户超时，请重试');
+                submitBtn.disabled = false;
+            };
+
+            xhr.open('POST', '/add_user', true);
+            xhr.send(formData);
+        });
+
+        document.querySelectorAll('.edit-user-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const username = this.getAttribute('data-username');
+                const newPassword = prompt(`请输入 ${username} 的新密码：`);
+                if (!newPassword) return;
+
+                const xhr = new XMLHttpRequest();
+                xhr.timeout = 30000;
+
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        try {
+                            const result = JSON.parse(xhr.responseText);
+                            if (xhr.status === 200 && result.success) {
+                                alert('密码修改成功！');
+                                location.reload();
+                            } else {
+                                alert('错误: ' + (result.message || '修改失败'));
+                            }
+                        } catch (e) {
+                            alert('错误: ' + (e.message || '未知错误'));
+                            console.error('修改密码失败:', e);
+                        }
+                    }
+                };
+
+                xhr.ontimeout = function() {
+                    alert('修改密码超时，请重试');
+                };
+
+                xhr.open('POST', '/edit_user', true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.send(JSON.stringify({ username: username, new_password: newPassword }));
+            });
+        });
+
+        document.querySelectorAll('.delete-user-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const username = this.getAttribute('data-username');
+                if (!confirm(`确定要删除用户 "${username}" 吗？此操作无法撤销！`)) return;
+
+                const xhr = new XMLHttpRequest();
+                xhr.timeout = 30000;
+
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        try {
+                            const result = JSON.parse(xhr.responseText);
+                            if (xhr.status === 200 && result.success) {
+                                alert('用户删除成功！');
+                                location.reload();
+                            } else {
+                                throw new Error(result.message || '删除失败');
+                            }
+                        } catch (e) {
+                            alert('错误: ' + (e.message || '未知错误'));
+                            console.error('删除用户失败:', e);
+                        }
+                    }
+                };
+
+                xhr.ontimeout = function() {
+                    alert('删除用户超时，请重试');
+                };
+
+                xhr.open('POST', '/delete_user', true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.send(JSON.stringify({ username: username }));
+            });
+        });
+    </script>
+</body>
+</html>
