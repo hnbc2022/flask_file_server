@@ -5,6 +5,7 @@ pyinstaller --onefile ^
   --noconsole ^
   --add-data "点名册.xlsx;." ^
   --add-data "users.db;." ^
+  --add-data "templates;templates" ^  # 添加 templates 目录
   --collect-all flask ^
   --collect-all werkzeug ^
   --collect-all pandas ^
